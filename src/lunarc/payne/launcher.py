@@ -44,7 +44,7 @@ slurm_script = """#!/bin/sh
 #SBATCH --exclusive
 #
 # job time, change for what your job requires
-#SBATCH -t 150:00:00
+#SBATCH -t 52:00:00
 #
 # job name and output file names
 #SBATCH -J payne_{destination_name}
@@ -55,13 +55,13 @@ cat $0
 module add GCC/4.9.3-binutils-2.25  OpenMPI/1.8.8 CFITSIO/3.38  GCCcore/6.4.0 SQLite/3.20.1 Anaconda3
 
 # This line used to work up until Feb 2019...
-source activate myenv
+source activate virtualenv
 
 # ... but since it's stopped working, this line makes sure we use the right python ...
-export PATH="/home/dominic/.conda/envs/myenv/bin:$PATH"
+export PATH="/home/travegre/.conda/envs/virtualenv/bin:$PATH"
 
 cd {python_directory}
-python payne_test.py {python_arguments}
+python payne_test2.py {python_arguments}
 
 """
 
@@ -78,7 +78,7 @@ for job in args.jobs:
     libraries = []
 
     # Start piecing together the python command line to run this job
-    start_string = "python3 payne_test.py"
+    start_string = "python3 payne_test2.py"
 
     for line in open(job):
         line = line.strip()
