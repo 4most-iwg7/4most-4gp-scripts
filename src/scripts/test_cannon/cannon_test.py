@@ -422,6 +422,10 @@ def main():
                         dest="interpolate",
                         help="Do not interpolate the test spectra onto a different raster.")
     parser.set_defaults(interpolate=False)
+    parser.add_argument('--train-wavelength-window',
+                        dest="train_wavelength_window",
+                        help="Use only the selected wavelength region for the training")
+    parser.set_defaults(train_wavelength_window=False)
     args = parser.parse_args()
 
     logger.info("Testing Cannon with arguments <{}> <{}> <{}> <{}>".format(args.test_library,
@@ -518,6 +522,14 @@ def main():
 
         # Construct and train a model
         time_training_start = time.time()
+
+        if args.train_wavelength_window:
+            train_window_mask = (training_spectra.wavelengths > float(args.train_wavelength_window.split('-')[0])) \
+                                & (training_spectra.wavelengths < float(args.train_wavelength_window.split('-')[1]))
+            training_spectra.wavelengths = training_spectra.wavelengths[train_window_mask]
+            training_spectra.values = training_spectra.values[:, train_window_mask]
+            training_spectra.value_errors = training_spectra.value_errors[:, train_window_mask]
+
         if not args.reload_cannon:
             model = cannon_class(training_set=training_spectra,
                                  wavelength_arms=wavelength_arm_breaks,
@@ -550,6 +562,12 @@ def main():
         for index in range(N):
             test_spectrum_array = test_library.open(ids=test_library_ids[index])
             spectrum = test_spectrum_array.extract_item(0)
+
+            if args.train_wavelength_window:
+                spectrum.wavelengths = spectrum.wavelengths[train_window_mask]
+                spectrum.values = spectrum.values[train_window_mask]
+                spectrum.value_errors = spectrum.value_errors[train_window_mask]
+
             logger.info("Testing {}/{}: {}".format(index + 1, N, spectrum.metadata['Starname']))
 
             # Calculate the time taken to process this spectrum

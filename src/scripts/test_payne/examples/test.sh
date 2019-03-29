@@ -14,9 +14,23 @@ mkdir -p ../../../output_data/payne
 
 # ----------------------
 
-python3 payne_test.py --train "galah_training_sample_4fs_hrs[SNR=250,5000<Teff<6000,3.8<logg<5]" \
-                      --test "galah_test_sample_4fs_hrs[SNR=100,5000<Teff<6000,3.8<logg<5]" \
-                      --description "4MOST HRS - 3 labels - Train on 0.25 GALAH. Test on 0.75 GALAH." \
-                      --labels "Teff,logg,[Fe/H]" \
-                      --output-file "../../../output_data/payne/payne_galah_hrs_3label"
+python3 payne_test2.py --train "galah_training_sample_4fs_hrs[SNR=250]" \
+                       --test "galah_test_sample_4fs_hrs" \
+                       --censor "line_list_filter_2016MNRAS.461.2174R.txt" \
+                       --description "4MOST HRS (censored) - Payne 10 labels - Train on 0.25 GALAH. Test on 0.75 GALAH." \
+                       --labels "Teff,logg,[Fe/H],[Ca/H],[Mg/H],[Ti/H],[Si/H],[Na/H],[Ni/H],[Cr/H]" \
+                       --assume-scaled-solar \
+                       --output-file "../../../output_data/payne/payne_galah_censored_hrs_10label" \
+                       --neuron-count "5"
+
+python3 payne_test2.py --train "galah_training_sample_4fs_lrs[SNR=250]" \
+                       --test "galah_test_sample_4fs_lrs" \
+                       --censor "line_list_filter_2016MNRAS.461.2174R.txt" \
+                       --description "4MOST LRS (censored) - Payne 10 labels - Train on 0.25 GALAH. Test on 0.75 GALAH." \
+                       --labels "Teff,logg,[Fe/H],[Ca/H],[Mg/H],[Ti/H],[Si/H],[Na/H],[Ni/H],[Cr/H]" \
+                       --assume-scaled-solar \
+                       --output-file "../../../output_data/payne/payne_galah_censored_lrs_10label" \
+                       --neuron-count "5" 
+
+
 
