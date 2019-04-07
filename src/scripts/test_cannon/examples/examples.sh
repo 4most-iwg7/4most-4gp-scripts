@@ -12,23 +12,6 @@ source ../../../../virtualenv/bin/activate
 # Now do some work
 mkdir -p ../output_data/cannon
 
-python3 cannon_test.py --train "4fs_ahm2017_sample_hrs[SNR=250]" \
-                       --test "4fs_ahm2017_perturbed_hrs" \
-                       --continuum-normalisation "running_mean" \
-                       --censor "line_list_filter_2016MNRAS.461.2174R.txt" \
-                       --description "4MOST HRS (censored) - 10 labels - Train on GES UVES AHM2017. Test on perturbed version." \
-                       --labels "Teff,logg,[Fe/H],[Ca/H],[Mg/H],[Ti/H],[Si/H],[Na/H],[Ni/H],[Cr/H]" \
-                       --assume-scaled-solar \
-                       --output-file "../../../output_data/cannon/cannon_ahm2017_perturbed_censored_hrs_cn_10label"
-python3 cannon_test.py --train "4fs_ahm2017_sample_lrs[SNR=250]" \
-                       --test "4fs_ahm2017_perturbed_lrs" \
-                       --continuum-normalisation "running_mean" \
-                       --censor "line_list_filter_2016MNRAS.461.2174R.txt" \
-                       --description "4MOST LRS (censored) - 10 labels - Train on GES UVES AHM2017. Test on perturbed version." \
-                       --labels "Teff,logg,[Fe/H],[Ca/H],[Mg/H],[Ti/H],[Si/H],[Na/H],[Ni/H],[Cr/H]" \
-                       --assume-scaled-solar \
-                       --output-file "../../../output_data/cannon/cannon_ahm2017_perturbed_censored_lrs_cn_10label"
-
 # ----------------------
 
 python3 cannon_test.py --train "4fs_ahm2017_sample_lrs[SNR=250]" \
@@ -37,11 +20,9 @@ python3 cannon_test.py --train "4fs_ahm2017_sample_lrs[SNR=250]" \
                        --labels "Teff,logg,[Fe/H]" \
                        --output-file "../../../output_data/cannon/cannon_demo_3label"
 
-python3 cannon_test.py --train "4fs_ahm2017_sample_lrs[SNR=250]" \
-                       --test "4fs_demo_stars_lrs" \
-                       --reload-cannon "../output_data/cannon/cannon_demo_3label.cannon" \
+python3 cannon_test.py --test "4fs_demo_stars_lrs" \
+                       --reload-cannon "../output_data/cannon/cannon_demo_3label" \
                        --description "4MOST LRS - 3 labels - Quick APOKASC test." \
-                       --labels "Teff,logg,[Fe/H]" \
                        --output-file "../../../output_data/cannon/cannon_demo_cp_3label"
 
 python3 cannon_test.py --train "4fs_ahm2017_sample_lrs[SNR=250]" \
@@ -527,5 +508,26 @@ python3 cannon_test.py --train "4fs_ahm2017_sample_lrs[SNR=250]" \
                        --assume-scaled-solar \
                        --output-file "../../../output_data/cannon/cannon_ahm2017_perturbed_reddened_censored_lrs_10label"
 
+# -----------------------------------------------------------------------------------------
+
 # All stellar labels set of GES stars
 # logg, [Nd/H], [O/H], [Mg/H], [V/H], [Ba/H], [Al/H], [Ca/H], [Mn/H], [S/H], [Sc/H], [Ce/H], [Ti/H], [Na/H], [Si/H], [La/H], [Ni/H], [C/H], [Zn/H], [Fe/H], [Co/H], [Cr/H], Teff
+
+# -----------------------------------------------------------------------------------------
+
+python3 cannon_test.py --train "4fs_ahm2017_sample_hrs[SNR=250]" \
+                       --test "4fs_ahm2017_perturbed_hrs" \
+                       --continuum-normalisation "running_mean" \
+                       --censor "line_list_filter_2016MNRAS.461.2174R.txt" \
+                       --description "4MOST HRS (censored) - 10 labels - Train on GES UVES AHM2017. Test on perturbed version." \
+                       --labels "Teff,logg,[Fe/H],[Ca/H],[Mg/H],[Ti/H],[Si/H],[Na/H],[Ni/H],[Cr/H]" \
+                       --assume-scaled-solar \
+                       --output-file "../../../output_data/cannon/cannon_ahm2017_perturbed_censored_hrs_cn_10label"
+python3 cannon_test.py --train "4fs_ahm2017_sample_lrs[SNR=250]" \
+                       --test "4fs_ahm2017_perturbed_lrs" \
+                       --continuum-normalisation "running_mean" \
+                       --censor "line_list_filter_2016MNRAS.461.2174R.txt" \
+                       --description "4MOST LRS (censored) - 10 labels - Train on GES UVES AHM2017. Test on perturbed version." \
+                       --labels "Teff,logg,[Fe/H],[Ca/H],[Mg/H],[Ti/H],[Si/H],[Na/H],[Ni/H],[Cr/H]" \
+                       --assume-scaled-solar \
+                       --output-file "../../../output_data/cannon/cannon_ahm2017_perturbed_censored_lrs_cn_10label"
