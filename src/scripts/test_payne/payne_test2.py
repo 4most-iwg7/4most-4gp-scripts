@@ -285,6 +285,13 @@ def main():
     parser.add_argument('--train-batch-count', required=False, dest='batch_count', type=int, default=1,
                         help="If training pixels in multiple batches on different machines, then this is the number "
                              "of batches.")
+    parser.add_argument('--test-batch-number', required=False, dest='test_batch_number', type=int, default=0,
+                        help="If testing spectra in multiple batches on different machines, then this is the number of "
+                             "the batch of spectra we are to test. It should be in the range 0 .. test_batch_count-1 "
+                             "inclusive.")
+    parser.add_argument('--test-batch-count', required=False, dest='test_batch_count', type=int, default=1,
+                        help="If testing spectra in multiple batches on different machines, then this is the number "
+                             "of batches.")
     parser.add_argument('--reload-payne', required=False, dest='reload_payne', default=None,
                         help="Skip training step, and reload a Payne that we've previously trained.")
     parser.add_argument('--description', dest='description',
@@ -507,20 +514,27 @@ def main():
             fig.savefig("{:s}.characteristic_gen_model_plot.png".format(output_filename), format='png')
 
 
+
+
+
         # Test the model
         N = len(test_library_ids)
         time_taken = np.zeros(N)
         results = []
-        for index in range(N):
+
+        spec_start = (N // args.test_batch_count + 1) * args.test_batch_number
+        spec_end = min(N, (N // args.test_batch_count + 1) * (args.test_batch_number + 1))
+        
+        for index in range(spec_start, spec_end):
             test_spectrum_array = test_library.open(ids=test_library_ids[index])
             spectrum = test_spectrum_array.extract_item(0)
 
-            if args.train_wavelength_window:
-                spectrum.wavelengths = spectrum.wavelengths[train_window_mask]
-                spectrum.values = spectrum.values[train_window_mask]
-                spectrum.value_errors = spectrum.value_errors[train_window_mask]
+            #if args.train_wavelength_window:
+            #    spectrum.wavelengths = spectrum.wavelengths[train_window_mask]
+            #    spectrum.values = spectrum.values[train_window_mask]
+            #    spectrum.value_errors = spectrum.value_errors[train_window_mask]
 
-            logger.info("Testing {}/{}: {}".format(index + 1, N, spectrum.metadata['Starname']))
+            logger.info("Testing {}/{}: {}".format(index + 1 - spec_start, (spec_end-spec_start), spectrum.metadata['Starname']))
 
             # Calculate the time taken to process this spectrum
             time_start = time.time()
@@ -530,7 +544,9 @@ def main():
                 spectrum = resample_spectrum(spectrum=spectrum, training_spectra=training_spectra)
 
             # Pass spectrum to the Payne
-            fit_data = model.fit_spectrum(spectrum=spectrum)
+            if args.train_wavelength_window:
+                censoring_masks = {'[Fe/H]':train_window_mask}
+            fit_data = model.fit_spectrum(spectrum=spectrum, censors=censoring_masks)
 
             # Check whether Payne failed
             # if labels is None:
@@ -563,9 +579,10 @@ def main():
                       }
             results.append(result)
 
+
         # Report time taken
         logger.info("Fitting of {:d} spectra completed. Took {:.2f} +/- {:.2f} sec / spectrum.".
-                    format(N,
+                    format((spec_end-spec_start),
                            np.mean(time_taken),
                            np.std(time_taken)))
 
@@ -596,13 +613,24 @@ def main():
         }
 
         # Write brief summary of run to JSON file, without masses of data
-        with gzip.open("{:s}.summary.json.gz".format(output_filename), "wt") as f:
+        #with gzip.open("{:s}.summary.json.gz".format(output_filename), "wt") as f:
+        #    f.write(json.dumps(output_data, indent=2))
+        with gzip.open(os.path.join(output_filename,
+            "batch_{:04d}_of_{:04d}.summary.json.gz".format(args.test_batch_number, args.test_batch_count)), "wt") as f:
             f.write(json.dumps(output_data, indent=2))
+
+        
 
         # Write full results to JSON file
         output_data["spectra"] = results
-        with gzip.open("{:s}.full.json.gz".format(output_filename), "wt") as f:
+        #with gzip.open("{:s}.full.json.gz".format(output_filename), "wt") as f:
+        #    f.write(json.dumps(output_data, indent=2))
+        with gzip.open(os.path.join(output_filename,
+            "batch_{:04d}_of_{:04d}.full.json.gz".format(args.test_batch_number, args.test_batch_count)), "wt") as f:
             f.write(json.dumps(output_data, indent=2))
+
+
+        logging.info("Saving results, batch {:04d} of {:04d} completed".format(args.test_batch_number, args.test_batch_count))
 
 
 # Do it right away if we're run as a script
