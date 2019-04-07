@@ -36,15 +36,18 @@ args = parser.parse_args()
 
 uid = os.getpid()
 
-num_training_workers = 50
+num_training_workers = 30
 
 slurm_script = """#!/bin/sh
+
 # requesting the number of nodes needed
 #SBATCH -N 1
 #SBATCH --exclusive
 #
+#SBATCH -A ota
+#
 # job time, change for what your job requires
-#SBATCH -t 52:00:00
+#SBATCH -t 20:00:00
 #
 # job name and output file names
 #SBATCH -J payne_{destination_name}
@@ -141,4 +144,4 @@ for job in args.jobs:
                 ))
 
         # This line submits the job to slurm, but I usuaully choose to do this manually
-        # os.system("sbatch {}".format(slurm_tmp_filename))
+        #os.system("sbatch {}".format(slurm_tmp_filename))
