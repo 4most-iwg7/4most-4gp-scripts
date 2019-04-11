@@ -27,6 +27,10 @@ from fourgp_payne import __version__ as fourgp_version
 from fourgp_payne.payne_wrapper_ting import PayneInstanceTing
 from fourgp_speclib import SpectrumLibrarySqlite
 
+import multiprocessing
+from multiprocessing import Pool
+from multiprocessing import cpu_count
+
 
 def resample_spectrum(spectrum, training_spectra):
     """
@@ -242,7 +246,9 @@ def create_censoring_masks(censoring_scheme, raster, censoring_line_list, label_
                         format(label_name, mask.sum(), len(raster), allowed_lines))
 
             # Invert the mask because the Cannon expects pixels to be True when they are *excluded*
-            censoring_masks[label_name] = ~mask
+            # censoring_masks[label_name] = ~mask
+            # NOT FOR PAYNE!!!            
+            censoring_masks[label_name] = mask
 
         # Make sure that label expressions also have masks set
         for label_name in label_expressions:
@@ -252,6 +258,60 @@ def create_censoring_masks(censoring_scheme, raster, censoring_line_list, label_
             logger.info("Pixels used for label {}: {} of {} (copied from Teff)".
                         format(label_name, len(raster) - mask.sum(), len(raster)))
     return censoring_masks
+
+def parallel_fit(params, dicti):
+    index, spectrum, spec_start, spec_end, args, training_spectra, censoring_masks, model, test_labels, train_window_mask = params
+
+    #if args.train_wavelength_window:
+    #    spectrum.wavelengths = spectrum.wavelengths[train_window_mask]
+    #    spectrum.values = spectrum.values[train_window_mask]
+    #    spectrum.value_errors = spectrum.value_errors[train_window_mask]
+
+    logger.info("Testing {}/{}: {}".format(index + 1 - spec_start, (spec_end-spec_start), spectrum.metadata['Starname']))
+
+    # Calculate the time taken to process this spectrum
+    time_start = time.time()
+
+    # If requested, interpolate the test set onto the same raster as the training set. DANGEROUS!
+    if args.interpolate:
+        spectrum = resample_spectrum(spectrum=spectrum, training_spectra=training_spectra)
+
+    # Pass spectrum to the Payne
+    if args.train_wavelength_window:
+        censoring_masks = {'[Fe/H]':train_window_mask}
+
+    fit_data = model.fit_spectrum(spectrum=spectrum, censors=censoring_masks)
+
+    # Check whether Payne failed
+    # if labels is None:
+    #    continue
+
+    # Measure the time taken
+    time_end = time.time()
+    time_taken = time_end - time_start
+
+    # Identify which star it is and what the SNR is
+    star_name = spectrum.metadata["Starname"] if "Starname" in spectrum.metadata else ""
+    uid = spectrum.metadata["uid"] if "uid" in spectrum.metadata else ""
+
+    # Fudge the errors for now until I work this out
+    # err_labels = [0 for item in test_labels]
+    err_labels = fit_data['uncertainties'].flatten()
+
+    # Turn list of label values into a dictionary
+    payne_output = dict(list(zip(test_labels, fit_data['results'].flatten())))
+
+    # Add the standard deviations of each label into the dictionary
+    payne_output.update(dict(list(zip(["E_{}".format(label_name) for label_name in test_labels], err_labels))))
+
+    # Add the star name and the SNR ratio of the test spectrum
+    result = {"Starname": star_name,
+              "uid": uid,
+              "time": time_taken,
+              "spectrum_metadata": spectrum.metadata,
+              "cannon_output": payne_output
+              }
+    dicti.append(result)
 
 
 def main():
@@ -518,120 +578,143 @@ def main():
 
 
         # Test the model
-        N = len(test_library_ids)
-        time_taken = np.zeros(N)
-        results = []
+        if not os.path.exists(os.path.join(output_filename,
+            "batch_{:04d}_of_{:04d}.full.json.gz".format(args.test_batch_number, args.test_batch_count))):
+            N = len(test_library_ids)
+            time_taken = np.zeros(N)
+            results = []
 
-        spec_start = (N // args.test_batch_count + 1) * args.test_batch_number
-        spec_end = min(N, (N // args.test_batch_count + 1) * (args.test_batch_number + 1))
-        
-        for index in range(spec_start, spec_end):
-            test_spectrum_array = test_library.open(ids=test_library_ids[index])
-            spectrum = test_spectrum_array.extract_item(0)
+            spec_start = (N // args.test_batch_count + 1) * args.test_batch_number
+            spec_end = min(N, (N // args.test_batch_count + 1) * (args.test_batch_number + 1))
+            
+            
+            threads = cpu_count()
+            #srng = split_seq(range(spec_start, spec_end), threads) 
+            if not args.train_wavelength_window:
+                train_window_mask = False
+            
+            params = [spec_start, spec_end, args, training_spectra, censoring_masks, model, test_labels, train_window_mask]
+            manager = multiprocessing.Manager()
 
-            #if args.train_wavelength_window:
-            #    spectrum.wavelengths = spectrum.wavelengths[train_window_mask]
-            #    spectrum.values = spectrum.values[train_window_mask]
-            #    spectrum.value_errors = spectrum.value_errors[train_window_mask]
+            for batch in range(spec_start, spec_end)[::threads]:
+                batch = [[i, test_library.open(ids=test_library_ids[i]).extract_item(0)]+params for i in range(batch, batch+threads) if i<len(test_library_ids)]            
+                
+                dicti = manager.list()
+                
+                ps = []
+                for i in batch:
+                    p = multiprocessing.Process(target=parallel_fit, args=(i, dicti))
+                    ps.append(p)
+                    p.start()
+                  
+                for p in ps:
+                    p.join()
 
-            logger.info("Testing {}/{}: {}".format(index + 1 - spec_start, (spec_end-spec_start), spectrum.metadata['Starname']))
+                #with Pool(threads) as pool:
+                #    batch_results = pool.map(parallel_fit, [[i, test_library.open(ids=test_library_ids[i]).extract_item(0)]+params for i in range(batch, batch+threads) if i<len(test_library_ids)])
+                
+                for result in dicti:
+                    results.append(result)
 
-            # Calculate the time taken to process this spectrum
-            time_start = time.time()
+            
+            # Report time taken
+            logger.info("Fitting of {:d} spectra completed. Took {:.2f} +/- {:.2f} sec / spectrum.".
+                        format((spec_end-spec_start),
+                               np.mean(time_taken),
+                               np.std(time_taken)))
 
-            # If requested, interpolate the test set onto the same raster as the training set. DANGEROUS!
-            if args.interpolate:
-                spectrum = resample_spectrum(spectrum=spectrum, training_spectra=training_spectra)
+            # Create output data structure
+            censoring_output = None
+            if censoring_masks is not None:
+                censoring_output = dict([(label, tuple([int(i) for i in mask]))
+                                         for label, mask in censoring_masks.items()])
 
-            # Pass spectrum to the Payne
-            if args.train_wavelength_window:
-                censoring_masks = {'[Fe/H]':train_window_mask}
-            fit_data = model.fit_spectrum(spectrum=spectrum, censors=censoring_masks)
+            output_data = {
+                "hostname": os.uname()[1],
+                "generator": __file__,
+                "4gp_version": fourgp_version,
+                "cannon_version": None,
+                "payne_version": model.payne_version,
+                "start_time": time_training_start,
+                "end_time": time.time(),
+                "training_time": time_training_end - time_training_start,
+                "description": args.description,
+                "train_library": args.train_library,
+                "test_library": args.test_library,
+                "tolerance": None,
+                "assume_scaled_solar": args.assume_scaled_solar,
+                "line_list": args.censor_line_list,
+                "labels": test_labels,
+                "wavelength_raster": tuple(raster),
+                "censoring_mask": censoring_output
+            }
 
-            # Check whether Payne failed
-            # if labels is None:
-            #    continue
+            # Write brief summary of run to JSON file, without masses of data
+            #with gzip.open("{:s}.summary.json.gz".format(output_filename), "wt") as f:
+            #    f.write(json.dumps(output_data, indent=2))
+            with gzip.open(os.path.join(output_filename,
+                "batch_{:04d}_of_{:04d}.summary.json.gz".format(args.test_batch_number, args.test_batch_count)), "wt") as f:
+                f.write(json.dumps(output_data, indent=2))
 
-            # Measure the time taken
-            time_end = time.time()
-            time_taken[index] = time_end - time_start
+            
 
-            # Identify which star it is and what the SNR is
-            star_name = spectrum.metadata["Starname"] if "Starname" in spectrum.metadata else ""
-            uid = spectrum.metadata["uid"] if "uid" in spectrum.metadata else ""
-
-            # Fudge the errors for now until I work this out
-            # err_labels = [0 for item in test_labels]
-            err_labels = fit_data['uncertainties'].flatten()
-
-            # Turn list of label values into a dictionary
-            payne_output = dict(list(zip(test_labels, fit_data['results'].flatten())))
-
-            # Add the standard deviations of each label into the dictionary
-            payne_output.update(dict(list(zip(["E_{}".format(label_name) for label_name in test_labels], err_labels))))
-
-            # Add the star name and the SNR ratio of the test spectrum
-            result = {"Starname": star_name,
-                      "uid": uid,
-                      "time": time_taken[index],
-                      "spectrum_metadata": spectrum.metadata,
-                      "cannon_output": payne_output
-                      }
-            results.append(result)
-
-
-        # Report time taken
-        logger.info("Fitting of {:d} spectra completed. Took {:.2f} +/- {:.2f} sec / spectrum.".
-                    format((spec_end-spec_start),
-                           np.mean(time_taken),
-                           np.std(time_taken)))
-
-        # Create output data structure
-        censoring_output = None
-        if censoring_masks is not None:
-            censoring_output = dict([(label, tuple([int(i) for i in mask]))
-                                     for label, mask in censoring_masks.items()])
-
-        output_data = {
-            "hostname": os.uname()[1],
-            "generator": __file__,
-            "4gp_version": fourgp_version,
-            "cannon_version": None,
-            "payne_version": model.payne_version,
-            "start_time": time_training_start,
-            "end_time": time.time(),
-            "training_time": time_training_end - time_training_start,
-            "description": args.description,
-            "train_library": args.train_library,
-            "test_library": args.test_library,
-            "tolerance": None,
-            "assume_scaled_solar": args.assume_scaled_solar,
-            "line_list": args.censor_line_list,
-            "labels": test_labels,
-            "wavelength_raster": tuple(raster),
-            "censoring_mask": censoring_output
-        }
-
-        # Write brief summary of run to JSON file, without masses of data
-        #with gzip.open("{:s}.summary.json.gz".format(output_filename), "wt") as f:
-        #    f.write(json.dumps(output_data, indent=2))
-        with gzip.open(os.path.join(output_filename,
-            "batch_{:04d}_of_{:04d}.summary.json.gz".format(args.test_batch_number, args.test_batch_count)), "wt") as f:
-            f.write(json.dumps(output_data, indent=2))
-
-        
-
-        # Write full results to JSON file
-        output_data["spectra"] = results
-        #with gzip.open("{:s}.full.json.gz".format(output_filename), "wt") as f:
-        #    f.write(json.dumps(output_data, indent=2))
-        with gzip.open(os.path.join(output_filename,
-            "batch_{:04d}_of_{:04d}.full.json.gz".format(args.test_batch_number, args.test_batch_count)), "wt") as f:
-            f.write(json.dumps(output_data, indent=2))
+            # Write full results to JSON file
+            output_data["spectra"] = results
+            #with gzip.open("{:s}.full.json.gz".format(output_filename), "wt") as f:
+            #    f.write(json.dumps(output_data, indent=2))
+            with gzip.open(os.path.join(output_filename,
+                "batch_{:04d}_of_{:04d}.full.json.gz".format(args.test_batch_number, args.test_batch_count)), "wt") as f:
+                f.write(json.dumps(output_data, indent=2))
 
 
-        logging.info("Saving results, batch {:04d} of {:04d} completed".format(args.test_batch_number, args.test_batch_count))
+            logging.info("Saving results, batch {:04d} of {:04d} completed".format(args.test_batch_number, args.test_batch_count))
+        else:
+            # Load teh test results from batches and join them
+            logging.info("Loading Payne results from disk")
+            payne_batches_summary = {}
+            payne_batches_full = {}
+            for i in range(args.test_batch_count):
+                filename_summary = os.path.join(output_filename,
+                "batch_{:04d}_of_{:04d}.summary.json.gz".format(i, args.test_batch_count))
+                filename_full = os.path.join(output_filename,
+                "batch_{:04d}_of_{:04d}.full.json.gz".format(i, args.test_batch_count))
+                
+                with gzip.open(filename_summary, "r") as f: 
+                    payne_batches_summary.update(json.loads(f.read().decode('utf-8')))
+                with gzip.open(filename_full, "r") as f:
+                    if i == 0:
+                        payne_batches_full.update(json.loads(f.read().decode('utf-8')))
+                    else:
+                        payne_batches_full['spectra'].extend(json.loads(f.read().decode('utf-8'))['spectra'])
 
+
+
+                assert os.path.exists(filename_summary), "Could not proceed with joinning results, because " \
+                                                              "test data for batch {:d} of spectra is not present " \
+                                                              "on this server.".format(i)
+            
+            logging.info("Payne results loaded successfully")
+
+            with gzip.open("{:s}.full.json.gz".format(output_filename), "wt") as f:
+                f.write(json.dumps(payne_batches_full, indent=2))
+
+            with gzip.open("{:s}.summary.json.gz".format(output_filename), "wt") as f:
+                f.write(json.dumps(payne_batches_summary, indent=2))
+
+            logging.info("Payne batches merged successfully")
+
+def split_seq(seq, p):
+  newseq=[]
+  n=int(len(seq)/p)
+  r=len(seq)%p
+  b,e=0,n+min(1,r)
+
+  for i in range(p):
+    newseq.append(seq[b:e])
+    r=max(0,r-1)
+    b,e=e,e+n+min(1,r)
+  
+  return newseq 
 
 # Do it right away if we're run as a script
 if __name__ == "__main__":

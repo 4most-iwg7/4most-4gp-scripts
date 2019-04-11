@@ -78,7 +78,8 @@ def generate_histograms(data_sets, abscissa_label, assume_scaled_solar,
     unique_json_files = set([item['cannon_output'] for item in data_sets])
     labels_in_each_data_set = [json.loads(gzip.open(json_file + ".summary.json.gz", "rt").read())['labels']
                                for json_file in unique_json_files]
-    unique_labels = set([label for label_list in labels_in_each_data_set for label in label_list])
+    unique_labels = sorted(set([label for label_list in labels_in_each_data_set for label in label_list]))
+
 
     # Filter out any labels where we don't have metadata about how to plot them
     label_names = [item for item in unique_labels if item in label_metadata]
@@ -112,6 +113,7 @@ def generate_histograms(data_sets, abscissa_label, assume_scaled_solar,
         if data_set['title'] is None:
             data_set['title'] = re.sub("_", r"\_", cannon_output['description'])
 
+        
         # Calculate the accuracy of the Cannon's abundance determinations
         accuracy_calculator = CannonAccuracyCalculator(
             cannon_json_output=cannon_output,
@@ -120,11 +122,13 @@ def generate_histograms(data_sets, abscissa_label, assume_scaled_solar,
             assume_scaled_solar=assume_scaled_solar,
             abscissa_field=abscissa_info['field']
         )
-
+        
         stars_which_meet_filter = accuracy_calculator.filter_test_stars(constraints=data_set['filters'].split(";"))
 
+        
         accuracy_calculator.calculate_cannon_offsets(filter_on_indices=stars_which_meet_filter)
-
+        
+        
         # Add data set to plot
         legend_label = data_set['title']  # Read the title which was supplied on the command line for this dataset
         if run_title:
@@ -148,6 +152,7 @@ def generate_histograms(data_sets, abscissa_label, assume_scaled_solar,
         # This full list of data points is used to make histograms
         for abscissa_index, abscissa_value in enumerate(abscissa_values):
             displayed_abscissa_value = abscissa_value
+
             if abscissa_label == "SNR/A":
                 displayed_abscissa_value = snr_converter.per_pixel(abscissa_value).per_a()
 
@@ -177,7 +182,7 @@ def generate_histograms(data_sets, abscissa_label, assume_scaled_solar,
                        )
 
             data_file_names.append(data_file)
-
+          
         del cannon_output
 
     # Now plot the data
@@ -246,8 +251,9 @@ plot {plot_items}
                                   x_min=-label_info["offset_max"] * 1.2,
                                   x_max=label_info["offset_max"] * 1.2,
                                   make_histograms="".join(["""
-histogram f_{0:d}_{1:.0f}() \"{2}\" using {3}
-                                  """.format(j, displayed_abscissa_value, data_item, column)
+histogram [{0:.0f}:{1:.0f}] f_{2:d}_{3:.0f}() \"{4}\" using {5}
+                                  """.format(-label_info["offset_max"] * 1.2, label_info["offset_max"] * 1.2, 
+                                    j, displayed_abscissa_value, data_item, column)
                                                            for abscissa_index, (displayed_abscissa_value, data_items) in
                                                            enumerate(sorted(data_set_items.items()))
                                                            for j, (data_item, snr_converter, column) in
