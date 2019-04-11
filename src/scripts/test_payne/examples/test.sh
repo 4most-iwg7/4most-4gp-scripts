@@ -13,6 +13,7 @@ source ../../../../virtualenv/bin/activate
 mkdir -p ../../../output_data/payne
 
 # ----------------------
+export OMP_NUM_THREADS=1
 
 python3 payne_test2.py --train "galah_training_sample_4fs_lrs[SNR=250]" \
                        --test "galah_test_sample_4fs_lrs" \
@@ -26,12 +27,30 @@ python3 payne_test2.py --train "galah_training_sample_4fs_lrs[SNR=250]" \
                        --output-file "../../../output_data/payne/s2_payne_galah_censored_lrs_10label_10neuron" \
                        --neuron-count "10"
 
-#python3 payne_test2.py --train "galah_training_sample_4fs_lrs[SNR=250]" \
-#                       --test "galah_test_sample_4fs_lrs" \
+
+
+
+
+
+
+# python3 payne_test2.py --train "galah_training_sample_4fs_hrs[SNR=250]" \
+#                       --test "pepsi_synthetic_4fs_hrs" \
 #                       --censor "line_list_filter_2016MNRAS.461.2174R.txt" \
-#                       --description "4MOST LRS (censored) - Payne 10 labels - Train on 0.25 GALAH. Test on 0.75 GALAH." \
+#                       --description "4MOST HRS (censored) - Payne 10 labels - Train on 0.25 GALAH. Test on 0.75 GALAH." \
+#                       --labels "Teff,logg,[Fe/H],[Ca/H],[Mg/H],[Ti/H],[Si/H],[Na/H],[Ni/H],[Cr/H]" \
+#                       --reload-payne "true" \
+#                       --assume-scaled-solar \
+#                       --train-batch-count 10 \
+#                       --test-batch-count 1 \
+#                       --output-file "../../../output_data/payne/payne_galah_censored_hrs_10label_test_pepsi_synthetic" \
+#                       --neuron-count "10"
+
+# python3 payne_test2.py --train "galah_training_sample_4fs_hrs[SNR=250]" \
+#                       --test "galah_test_sample_4fs_hrs" \
+#                       --censor "line_list_filter_2016MNRAS.461.2174R.txt" \
+#                       --description "4MOST HRS (censored) - Payne 10 labels - Train on 0.25 GALAH. Test on 0.75 GALAH." \
 #                       --labels "Teff,logg,[Fe/H],[Ca/H],[Mg/H],[Ti/H],[Si/H],[Na/H],[Ni/H],[Cr/H]" \
 #                       --assume-scaled-solar \
-#                       --output-file "../../../output_data/payne/payne_galah_censored_lrs_10label" \
-#                       --neuron-count "5" 
+#                       --output-file "../../../output_data/payne/payne_galah_censored_hrs_test" \
+#                       --neuron-count "10"
 

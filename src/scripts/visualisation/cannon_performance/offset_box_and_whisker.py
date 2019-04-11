@@ -78,7 +78,7 @@ def generate_box_and_whisker_plots(data_sets, abscissa_label, assume_scaled_sola
     unique_json_files = set([item['cannon_output'] for item in data_sets])
     labels_in_each_data_set = [json.loads(gzip.open(json_file + ".summary.json.gz", "rt").read())['labels']
                                for json_file in unique_json_files]
-    unique_labels = set([label for label_list in labels_in_each_data_set for label in label_list])
+    unique_labels = sorted(set([label for label_list in labels_in_each_data_set for label in label_list]))
 
     # Filter out any labels where we don't have metadata about how to plot them
     label_names = [item for item in unique_labels if item in label_metadata]

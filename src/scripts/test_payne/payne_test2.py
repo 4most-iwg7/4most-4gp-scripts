@@ -680,12 +680,13 @@ def main():
                 "batch_{:04d}_of_{:04d}.full.json.gz".format(i, args.test_batch_count))
                 
                 with gzip.open(filename_summary, "r") as f: 
-                    payne_batches_summary.update(json.loads(f.read()))
+                    payne_batches_summary.update(json.loads(f.read().decode('utf-8')))
+                
                 with gzip.open(filename_full, "r") as f:
                     if i == 0:
-                        payne_batches_full.update(json.loads(f.read()))
+                        payne_batches_full.update(json.loads(f.read().decode('utf-8')))
                     else:
-                        payne_batches_full['spectra'].extend(json.loads(f.read())['spectra'])
+                        payne_batches_full['spectra'].extend(json.loads(f.read().decode('utf-8'))['spectra'])
 
 
                 assert os.path.exists(filename_summary), "Could not proceed with joinning results, because " \

@@ -196,9 +196,12 @@ class CannonAccuracyCalculator:
                     if label not in self.label_offsets[abscissa_value]:
                         self.label_offsets[abscissa_value][label] = []
 
+                    
                     # File this offset, even if it is NaN. This is vital as some codes require that we return a
                     # consistent number of offsets for every label (for example, when making histograms, we record
                     # the offsets for each star in a giant table, with one row per star).
+                    if np.isnan(cannon_offset):
+                        cannon_offset = -9999
                     self.label_offsets[abscissa_value][label].append(cannon_offset)
 
     def filter_test_stars(self, constraints):
@@ -270,4 +273,4 @@ class CannonAccuracyCalculator:
                 output_index_list.append(index)
 
         # Return output set
-        return output_index_list
+        return sorted(output_index_list)
