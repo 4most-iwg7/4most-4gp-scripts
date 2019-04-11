@@ -22,7 +22,7 @@ python3 payne_test2.py --train "galah_training_sample_4fs_lrs[SNR=250]" \
                       --description "4MOST LRS (censored) - Payne 10 labels - Train on 0.25 GALAH. Test on 0.75 GALAH." \
                       --labels "Teff,logg,[Fe/H],[Ca/H],[Mg/H],[Ti/H],[Si/H],[Na/H],[Ni/H],[Cr/H]" \
                       --assume-scaled-solar \
-                      --output-file "../../../output_data/payne/s2_payne_galah_censored_lrs_10label" \
+                      --output-file "../../../output_data/payne/test_payne_galah_censored_lrs_10label" \
                       --neuron-count "10"
 
 
