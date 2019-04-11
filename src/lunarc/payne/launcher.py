@@ -36,15 +36,16 @@ args = parser.parse_args()
 
 uid = os.getpid()
 
-num_training_workers = 50
-
 slurm_script = """#!/bin/sh
+
 # requesting the number of nodes needed
 #SBATCH -N 1
 #SBATCH --exclusive
 #
+#SBATCH -A ota
+#
 # job time, change for what your job requires
-#SBATCH -t 52:00:00
+#SBATCH -t 2:00:00
 #
 # job name and output file names
 #SBATCH -J payne_{destination_name}
@@ -61,6 +62,7 @@ source activate virtualenv
 export PATH="/home/travegre/.conda/envs/virtualenv/bin:$PATH"
 
 cd {python_directory}
+export OMP_NUM_THREADS=1
 python payne_test2.py {python_arguments}
 
 """
@@ -80,16 +82,38 @@ for job in args.jobs:
     # Start piecing together the python command line to run this job
     start_string = "python3 payne_test2.py"
 
+
     for line in open(job):
         line = line.strip()
+
         # Ignore blank lines and lines which begin with a hash
         if (len(line) == 0) or (line[0] == '#'):
             continue
+
 
         # Check for output destination
         test = re.match("--output-file \"(.*)\"", line)
         if test is not None:
             destination = test.group(1)
+
+        # Get num of testing workers
+        test = re.match("--num-testing-workers (.*)\\ ", line)
+        if test is not None:
+            num_testing_workers = int(test.group(1))
+
+        # Get num of training workers
+        test = re.match("--num-training-workers (.*)\\ ", line)
+        if test is not None:
+            num_training_workers = int(test.group(1))
+
+        # Check whether training or testing
+        test = re.match("--reload-payne \"(.*)\"", line)
+        if test is not None:
+            if 'false' in test.group(1):
+                training_time = True
+            else:
+                training_time = False
+
 
         # Check for spectrum libraries we need
         test = re.search("(?:--train|--test) \"([^\"\\[]*)([^\"]*)?\"", line)
@@ -128,17 +152,30 @@ for job in args.jobs:
         counter += 1
 
         # Write a slurm job description file
-        for worker_id in range(num_training_workers):
-            slurm_tmp_filename = "tmp_{}_{:03d}.sh".format(run_id, worker_id)
-            with open(slurm_tmp_filename, "w") as f:
-                this_worker_python_command = "{} --train-batch-count {} --train-batch-number {}". \
-                    format(command, num_training_workers, worker_id)
-                f.write(slurm_script.format(
-                    num_training_workers=num_training_workers,
-                    python_directory=config_path,
-                    python_arguments=this_worker_python_command,
-                    destination_name=os.path.split(destination)[1]
-                ))
+        if training_time:
+            for worker_id in range(num_training_workers):
+                slurm_tmp_filename = "tmp_{}_{:03d}.sh".format(run_id, worker_id)
+                with open(slurm_tmp_filename, "w") as f:
+                    this_worker_python_command = "{} --train-batch-number {}". \
+                        format(command, worker_id)
+                    f.write(slurm_script.format(
+                        num_training_workers=num_training_workers,
+                        python_directory=config_path,
+                        python_arguments=this_worker_python_command,
+                        destination_name=os.path.split(destination)[1]
+                    ))
+        else:
+            for worker_id in range(num_testing_workers):
+                slurm_tmp_filename = "tmp_test_{}_{:03d}.sh".format(run_id, worker_id)
+                with open(slurm_tmp_filename, "w") as f:
+                    this_worker_python_command = "{} --test-batch-number {}". \
+                        format(command, worker_id)
+                    f.write(slurm_script.format(
+                        num_testing_workers=num_testing_workers,
+                        python_directory=config_path,
+                        python_arguments=this_worker_python_command,
+                        destination_name=os.path.split(destination)[1]
+                    ))
 
         # This line submits the job to slurm, but I usuaully choose to do this manually
-        # os.system("sbatch {}".format(slurm_tmp_filename))
+        #os.system("sbatch {}".format(slurm_tmp_filename))

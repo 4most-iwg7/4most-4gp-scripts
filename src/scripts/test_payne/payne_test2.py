@@ -338,20 +338,20 @@ def main():
                              "range.")
     parser.add_argument('--workspace', dest='workspace', default="",
                         help="Directory where we expect to find spectrum libraries.")
-    parser.add_argument('--train-batch-number', required=False, dest='batch_number', type=int, default=0,
+    parser.add_argument('--train-batch-number', required=False, dest='train_batch_number', type=int, default=0,
                         help="If training pixels in multiple batches on different machines, then this is the number of "
                              "the batch of pixels we are to train. It should be in the range 0 .. batch_count-1 "
                              "inclusive. If it is -1, then we skip training to move straight to testing.")
-    parser.add_argument('--train-batch-count', required=False, dest='batch_count', type=int, default=1,
-                        help="If training pixels in multiple batches on different machines, then this is the number "
-                             "of batches.")
     parser.add_argument('--test-batch-number', required=False, dest='test_batch_number', type=int, default=0,
                         help="If testing spectra in multiple batches on different machines, then this is the number of "
                              "the batch of spectra we are to test. It should be in the range 0 .. test_batch_count-1 "
                              "inclusive.")
-    parser.add_argument('--test-batch-count', required=False, dest='test_batch_count', type=int, default=1,
+    parser.add_argument('--num-training-workers', required=False, dest='train_batch_count', type=int, default=1,
+                        help="If training pixels in multiple batches on different machines, then this is the number "
+                             "of nodes/workers/batches.")
+    parser.add_argument('--num-testing-workers', required=False, dest='test_batch_count', type=int, default=1,
                         help="If testing spectra in multiple batches on different machines, then this is the number "
-                             "of batches.")
+                             "of nodes/workers/batches.")
     parser.add_argument('--reload-payne', required=False, dest='reload_payne', default=None,
                         help="Skip training step, and reload a Payne that we've previously trained.")
     parser.add_argument('--description', dest='description',
@@ -518,8 +518,8 @@ def main():
             model = PayneInstanceTing(training_set=training_spectra,
                                       label_names=test_labels,
                                       neuron_count=int(args.neuron_count),
-                                      batch_number=args.batch_number,
-                                      batch_count=args.batch_count,
+                                      batch_number=args.train_batch_number,
+                                      batch_count=args.train_batch_count,
                                       censors=censoring_masks,
                                       threads=None if args.multithread else 1,
                                       training_data_archive=output_filename,
@@ -529,8 +529,8 @@ def main():
             model = PayneInstanceTing(training_set=training_spectra,
                                       label_names=test_labels,
                                       neuron_count=int(args.neuron_count),
-                                      batch_number=args.batch_number,
-                                      batch_count=args.batch_count,
+                                      batch_number=args.train_batch_number,
+                                      batch_count=args.train_batch_count,
                                       censors=censoring_masks,
                                       threads=None if args.multithread else 1,
                                       training_data_archive=output_filename
@@ -681,12 +681,12 @@ def main():
                 
                 with gzip.open(filename_summary, "r") as f: 
                     payne_batches_summary.update(json.loads(f.read().decode('utf-8')))
+                
                 with gzip.open(filename_full, "r") as f:
                     if i == 0:
                         payne_batches_full.update(json.loads(f.read().decode('utf-8')))
                     else:
                         payne_batches_full['spectra'].extend(json.loads(f.read().decode('utf-8'))['spectra'])
-
 
 
                 assert os.path.exists(filename_summary), "Could not proceed with joinning results, because " \
