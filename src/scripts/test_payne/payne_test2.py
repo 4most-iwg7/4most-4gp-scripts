@@ -134,7 +134,7 @@ def evaluate_computed_labels(label_expressions, spectra):
             metadata[label_expression] = value
 
 
-def create_censoring_masks(censoring_scheme, raster, censoring_line_list, label_fields, label_expressions):
+def create_censoring_masks(censoring_scheme, raster, censoring_line_list, label_fields, label_expressions, logger=False):
     """
     Create censoring masks for each label we are fitting, based on pixels around the lines of each element.
 
@@ -158,7 +158,7 @@ def create_censoring_masks(censoring_scheme, raster, censoring_line_list, label_
     :return:
         A dictionary of Boolean masks, one for each label.
     """
-    global logger
+    #global logger
     censoring_masks = None
     if censoring_line_list != "":
         window = 1  # How many Angstroms either side of the line should be used?
@@ -259,7 +259,7 @@ def create_censoring_masks(censoring_scheme, raster, censoring_line_list, label_
                         format(label_name, len(raster) - mask.sum(), len(raster)))
     return censoring_masks
 
-def parallel_fit(params, dicti):
+def parallel_fit(params, dicti, ref_labels):
     index, spectrum, spec_start, spec_end, args, training_spectra, censoring_masks, model, test_labels, train_window_mask = params
 
     #if args.train_wavelength_window:
@@ -268,10 +268,10 @@ def parallel_fit(params, dicti):
     #    spectrum.value_errors = spectrum.value_errors[train_window_mask]
 
     logger.info("Testing {}/{}: {}".format(index + 1 - spec_start, (spec_end-spec_start), spectrum.metadata['Starname']))
-
+    
     # Calculate the time taken to process this spectrum
     time_start = time.time()
-
+    
     # If requested, interpolate the test set onto the same raster as the training set. DANGEROUS!
     if args.interpolate:
         spectrum = resample_spectrum(spectrum=spectrum, training_spectra=training_spectra)
@@ -280,7 +280,7 @@ def parallel_fit(params, dicti):
     if args.train_wavelength_window:
         censoring_masks = {'[Fe/H]':train_window_mask}
 
-    fit_data = model.fit_spectrum(spectrum=spectrum, censors=censoring_masks)
+    fit_data = model.fit_spectrum(spectrum=spectrum, censors=censoring_masks, ref_labels=ref_labels)
 
     # Check whether Payne failed
     # if labels is None:
@@ -501,7 +501,8 @@ def main():
             raster=raster,
             censoring_line_list=args.censor_line_list,
             label_fields=test_label_fields + test_labels_individual_batch,
-            label_expressions=test_labels_expressions
+            label_expressions=test_labels_expressions,
+            logger=logger
         )
 
         # Construct and train a model
@@ -575,8 +576,6 @@ def main():
 
 
 
-
-
         # Test the model
         if not os.path.exists(os.path.join(output_filename,
             "batch_{:04d}_of_{:04d}.full.json.gz".format(args.test_batch_number, args.test_batch_count))):
@@ -588,7 +587,7 @@ def main():
             spec_end = min(N, (N // args.test_batch_count + 1) * (args.test_batch_number + 1))
             
             
-            threads = cpu_count()
+            threads = 1#cpu_count()
             #srng = split_seq(range(spec_start, spec_end), threads) 
             if not args.train_wavelength_window:
                 train_window_mask = False
@@ -603,7 +602,23 @@ def main():
                 
                 ps = []
                 for i in batch:
-                    p = multiprocessing.Process(target=parallel_fit, args=(i, dicti))
+                    spectrum = i[1]
+                    ref_labels = []
+                    for j in test_labels:
+                        try:
+                            print(j, ' ', spectrum.metadata[j])
+                            ref_labels.append(spectrum.metadata[j])
+                        except:
+                            continue
+
+                    #if len(ref_labels) != 3:
+                    #    continue
+
+                    #for j in test_labels[3:]:
+                    #    ref_labels.append(0)
+                        
+                    
+                    p = multiprocessing.Process(target=parallel_fit, args=(i, dicti, np.array(ref_labels)))
                     ps.append(p)
                     p.start()
                   
